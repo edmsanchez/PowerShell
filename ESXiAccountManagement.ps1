@@ -425,13 +425,20 @@ function Add-ESXiAccount {
         }
         else {
             Write-Verbose -Message ((Get-Date -Format G) + "`tPrompt for $Name password...")
-            $credentials = Get-Credential -UserName $Name -Message "Enter Password for UserID: $Name"    
+            $credentials = Get-Credential -UserName $Name -Message "Enter Password for UserID: $Name"
         } #END if/else
         $accountArgs = $esxcli.system.account.add.CreateArgs()
         $accountArgs.id = $credentials.UserName
         $accountArgs.description = $Description
-        $accountArgs.password = $credentials.GetNetworkCredential().Password
-        $accountArgs.passwordconfirmation = $credentials.GetNetworkCredential().Password
+        try {
+            $accountArgs.password = $credentials.GetNetworkCredential().Password
+            $accountArgs.passwordconfirmation = $credentials.GetNetworkCredential().Password
+        }
+        catch {
+            Write-Host "`nError: Failed to gather User ID: $Name password" -ForegroundColor Red
+            Write-Host $_.Exception.Message -ForegroundColor Red
+            break
+        } #END catch
         Write-Host "`tAdding UserID: "$credentials.UserName" on $vmhost..."
         try {
             $esxcli.system.account.add.Invoke($accountArgs)
@@ -737,8 +744,16 @@ function Set-ESXiAccount {
                 } #END if/else
                 $updateAccount = $true
                 $accountArgs.id = $Name.Trim()
-                $accountArgs.password = $credentials.GetNetworkCredential().Password
-                $accountArgs.passwordconfirmation = $credentials.GetNetworkCredential().Password
+                try {
+                    $accountArgs.password = $credentials.GetNetworkCredential().Password
+                    $accountArgs.passwordconfirmation = $credentials.GetNetworkCredential().Password
+                }
+                catch {
+                    Write-Host "`nError: Failed to gather User ID: $Name password" -ForegroundColor Red
+                    Write-Host $_.Exception.Message -ForegroundColor Red
+                    break
+                } #END catch
+
             } #END if
             if ($updateAccount) {
                 Write-Host "`tUpdating UserID: $Name on $vmhost..."
