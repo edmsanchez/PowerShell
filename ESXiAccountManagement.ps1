@@ -208,7 +208,7 @@ function Get-ESXiAccount {
     #>
     if ($outputCollection) {
         Write-Verbose -Message ((Get-Date -Format G) + "`tInformation gathered")
-        Write-Host "`n" "ESXi Local Accounts:" -ForegroundColor Green
+        Write-Host "`nESXi Local Accounts:" -ForegroundColor Green
         $outputCollection | Format-Table -Wrap
     }
     else {
@@ -497,7 +497,7 @@ function Add-ESXiAccount {
     #>
     if ($outputCollection) {
         Write-Verbose -Message ((Get-Date -Format G) + "`tAccount Added")
-        Write-Host "`n" "ESXi Local Account Added:" -ForegroundColor Green
+        Write-Host "`nESXi Local Account Added:" -ForegroundColor Green
         $outputCollection | Format-Table -Wrap
     }
     else {
@@ -813,7 +813,7 @@ function Set-ESXiAccount {
     #>
     if ($outputCollection) {
         Write-Verbose -Message ((Get-Date -Format G) + "`tAccount Updated")
-        Write-Host "`n" "ESXi Local Account Updated:" -ForegroundColor Green
+        Write-Host "`nESXi Local Account Updated:" -ForegroundColor Green
         $outputCollection | Format-Table -Wrap
     }
     else {
@@ -1058,7 +1058,7 @@ function Remove-ESXiAccount {
     #>
     if ($outputCollection) {
         Write-Verbose -Message ((Get-Date -Format G) + "`tInformation gathered")
-        Write-Host "`n" "ESXi Local Accounts:" -ForegroundColor Green
+        Write-Host "`nESXi Local Accounts:" -ForegroundColor Green
         $outputCollection | Format-Table -Wrap
     }
     else {
@@ -1320,15 +1320,15 @@ function Get-ESXiAccountSecurity {
         Write-Verbose -Message ((Get-Date -Format G) + "`tNo information gathered")
     } #END if/else
     if ($outputCollection) {
-        Write-Host "`n" "ESXi Account Management Settings:" -ForegroundColor Green    
+        Write-Host "`nESXi Account Management Settings:" -ForegroundColor Green    
         $outputCollection | Format-Table -Wrap
     } #END if
     if ($accountLockedCollection) {
-        Write-Host "`n" "ESXi locked account events past $EventsPastHrs Hr(s):" -ForegroundColor Green    
+        Write-Host "`nESXi locked account events past $EventsPastHrs Hr(s):" -ForegroundColor Green    
         $accountLockedCollection | Format-Table -Wrap
     } #END if
     if ($badLogonCollection) {
-        Write-Host "`n" "ESXi bad logon events past $EventsPastHrs Hr(s):" -ForegroundColor Green    
+        Write-Host "`nESXi bad logon events past $EventsPastHrs Hr(s):" -ForegroundColor Green    
         $badLogonCollection | Format-Table -Wrap
     } #END if
 } #END function
