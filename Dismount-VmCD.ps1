@@ -4,9 +4,9 @@ function Dismount-VMCD {
       Unmounts any CD/DVD ISO image, and sets drive selection to "Client Device".
 
       .DESCRIPTION
-      Unmounts any CD/DVD ISO image, and sets drive selection to "Client Device".
+      Unmounts any CD/DVD ISO image including VMware tools installer, and sets drive selection to "Client Device".
       Will also detect stale CDROM ISO path Based on https://kb.vmware.com/s/article/66581
-      This implements v1 and v2 fixes, and identifies a VM that may be affected
+      This implements v1 or v2 fixes on a potentially affected VM
       
       Dismount-VMCD has been tested on ESXi 6.0 and above and VCSA 6.5 an above.
     
@@ -19,13 +19,39 @@ function Dismount-VMCD {
       this script helpful
     
       .EXAMPLE
+      Dismount-VMCD
+      By default, will unmount any ISO images on all VMs gathered from $global:DefaultVIServers (all open Connect-VIServer sessions).
+
+      .EXAMPLE
       Dismount-VMCD -VM "vm00*" -Whatif
-      For any VM with name vm00* it will identify and notify you of the intended actions, but will not carry them out
+      For any VM with name vm00* it will identify and notify you of the intended action(s), but will not carry them out
+
+      .EXAMPLE
+      Dismount-VMCD -VMhost "esxi01" -verbose
+      For all VMs in VMhost 'esxi01', it will  unmounts any CD/DVD ISO image including VMware tools installer
+      Verbose output tracks current progress, and helps when troubleshooting results.
       
-       .EXAMPLE
+      .EXAMPLE
       Dismount-VMCD -Cluster "Cluster01"  -StaleCdRomIsoPath ReconfigureV2
-      For all VMs in Cluster01, it will umount any ISO images, and will apply workaround from v2 Script to any VM it finds affected. you can also try -StaleCdRomIsoPath ReportOnly, -StaleCdRomIsoPath ReconfigureV1 and add -Whatif to get a preview of would happen
+      For all VMs in Cluster 'Cluster01', it will unmount any ISO images, and will apply workaround from v2 Script to any VMs potentially affected by KB66581.
+      ReconfigureV2 will update the CD/DVD device filename to "auto detect" or "emptyBackingString" for an affected VM. Example of VMX file update: ide1:0.fileName = "auto detect"
+      You can also use -StaleCdRomIsoPath ReportOnly, -StaleCdRomIsoPath ReconfigureV1 and add -Whatif to get a preview of what would happen
     
+      .EXAMPLE
+      Dismount-VMCD -Datacenter "Datacenter01"  -StaleCdRomIsoPath ReconfigureV1 -verbose
+      For all VMs in Datacenter 'Datacenter01', it will unmount any ISO images, and will apply workaround from v1 Script to any VMs potentially affected by KB66581.
+      ReconfigureV1 will reconfigure the CDROM with useAutoDetect to true. The VMX file will als be updated, Example of VMX file update: ide1:0.autoDetect = "TRUE"
+      You can also use -StaleCdRomIsoPath ReportOnly, -StaleCdRomIsoPath ReconfigureV2 and add -Whatif to get a preview of what would happen
+      Verbose output tracks current progress, and helps when troubleshooting results.
+    
+      .INPUTS
+      Parameters name(s) of: VM / VMhost / Cluster / DataCenter
+      StaleCdRomIsoPath Parameter, with valid options: "ReportOnly", "ReconfigureV1", "ReconfigureV2"
+
+      .OUTPUTS
+      [System.Collections.ArrayList]
+      [System.Management.Automation.PSCustomObject]
+
       .LINK
       https://github.com/edmsanchez/PowerShell/Dismount-VMCD.ps1
     #>
