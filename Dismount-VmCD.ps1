@@ -5,8 +5,8 @@ function Dismount-VMCD {
 
       .DESCRIPTION
       Unmounts any CD/DVD ISO image including VMware tools installer, and sets drive selection to "Client Device".
-      Will also detect stale CDROM ISO path Based on https://kb.vmware.com/s/article/66581
-      This implements v1 or v2 fixes on a potentially affected VM
+      Will also detect stale CDROM ISO path Based on https://kb.vmware.com/s/article/66581 and can
+      implement v1 or v2 fix on a potentially affected VM
       
       Dismount-VMCD has been tested on ESXi 6.0 and above and VCSA 6.5 an above.
     
