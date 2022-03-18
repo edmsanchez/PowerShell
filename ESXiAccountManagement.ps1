@@ -1,14 +1,13 @@
 function Get-ESXiAccount {
     <#
      .SYNOPSIS
-       Get ESXi 6.x local account
+       Get ESXi 6.x and above local account
      .DESCRIPTION
-       List all local ESXi 6.x account(s) and their role
+       List all local ESXi 6.x and above account(s) and their role
      .NOTES
        Author: Edgar Sanchez - @edmsanchez13
      .Link
        https://github.com/edmsanchez/PowerShell
-       https://virtualcornerstone.com/
      .INPUTS
        No inputs required
      .OUTPUTS
@@ -164,9 +163,9 @@ function Get-ESXiAccount {
     
         <#
          Validate ESXi Version
-         Will run only of 6.x
+         Will run only of 6.x and above
         #>
-        if ($vmhost.ApiVersion -notmatch '6.') {
+        if ([decimal]$vmHost.ApiVersion.Substring(0, 3) -lt 6) {
             Write-Warning -Message ("`t$vmhost is ESXi v" + $vmhost.ApiVersion + ". Skipping host.")
             continue
         }
@@ -179,7 +178,7 @@ function Get-ESXiAccount {
         $localAccounts = $esxcli.system.account.list.Invoke()
         $systemPermission = $esxcli.system.permission.list.Invoke()
         foreach ($account in $localAccounts) {
-            $accountRole = $systemPermission | Where-Object {$_.Principal -eq $account.UserID} | Select-Object -ExpandProperty Role
+            $accountRole = $systemPermission | Where-Object { $_.Principal -eq $account.UserID } | Select-Object -ExpandProperty Role
 
             <#
               Use a custom object to store
@@ -209,7 +208,7 @@ function Get-ESXiAccount {
     if ($outputCollection) {
         Write-Verbose -Message ((Get-Date -Format G) + "`tInformation gathered")
         Write-Host "`nESXi Local Accounts:" -ForegroundColor Green
-        $outputCollection | Format-Table -Wrap
+        return $outputCollection
     }
     else {
         Write-Verbose -Message ((Get-Date -Format G) + "`tNo information gathered")
@@ -219,14 +218,13 @@ function Get-ESXiAccount {
 function Add-ESXiAccount {
     <#
      .SYNOPSIS
-       Add ESXi 6.x local account
+       Add ESXi 6.x and above local account
      .DESCRIPTION
-       Create local ESXi 6.x account
+       Create local ESXi 6.x and above account
      .NOTES
        Author: Edgar Sanchez - @edmsanchez13
      .Link
        https://github.com/edmsanchez/PowerShell
-       https://virtualcornerstone.com/
      .INPUTS
        No inputs required
      .OUTPUTS
@@ -255,6 +253,10 @@ function Add-ESXiAccount {
        The name(s) of the vSphere Virtual Datacenter(s).
      .EXAMPLE
        Add-ESXiAccount -Name "testuser" -Description "Local test User" -Permission "Admin" -Datacenter vDC001
+    .PARAMETER Credentials
+       Provides User Credentials as a PSCredential Object
+     .EXAMPLE
+       Add-ESXiAccount -Name "testuser" -Description "Local test User" -Permission "Admin" -Datacenter vDC001 -Credentials $UserCredentials
     #> 
     
     <#
@@ -268,7 +270,11 @@ function Add-ESXiAccount {
         [Parameter(Mandatory = $false)][ValidateSet("Admin", "ReadOnly", "NoAccess")]$Permission,
         [Parameter(Mandatory = $false)]$VMhost,
         [Parameter(Mandatory = $false)]$Cluster,
-        [Parameter(Mandatory = $false)]$Datacenter
+        [Parameter(Mandatory = $false)]$Datacenter,
+        [ValidateNotNull()]
+        [System.Management.Automation.PSCredential]
+        [System.Management.Automation.Credential()]
+        $Credentials = [System.Management.Automation.PSCredential]::Empty
     )
     
     $skipCollection = @()
@@ -371,7 +377,13 @@ function Add-ESXiAccount {
     <#
       Main code execution
     #>
-    $credentials = $null
+
+    #Validate PSCredential
+    if ($Credentials -eq [System.Management.Automation.PSCredential]::Empty) {
+        Write-Verbose -Message ((Get-Date -Format G) + "`tPrompt for $Name password...")
+        $Credentials = Get-Credential -UserName $Name -Message "Enter Password for UserID: $Name"
+    } #END if
+
     foreach ($vmhost in $vHostList) {
     
         <#
@@ -398,9 +410,9 @@ function Add-ESXiAccount {
     
         <#
          Validate ESXi Version
-         Will run only of 6.x
+         Will run only of 6.x and above
         #>
-        if ($vmhost.ApiVersion -notmatch '6.') {
+        if ([decimal]$vmHost.ApiVersion.Substring(0, 3) -lt 6) {
             Write-Warning -Message ("`t$vmhost is ESXi v" + $vmhost.ApiVersion + ". Skipping host.")
             continue
         }
@@ -410,7 +422,7 @@ function Add-ESXiAccount {
         #>
         $esxcli = Get-EsxCli -VMHost $vmhost -V2
         Write-Verbose -Message ((Get-Date -Format G) + "`tValidating if $Name User ID exists on $vmhost...")
-        if ($esxcli.system.account.list.Invoke() | Where-Object {$_.UserID -eq $Name}) {
+        if ($esxcli.system.account.list.Invoke() | Where-Object { $_.UserID -eq $Name }) {
             Write-Warning -Message "`t$Name User ID already exists on $vmhost. Skipping host."
             continue
         } #END if
@@ -418,34 +430,25 @@ function Add-ESXiAccount {
         <#
           Add ESXi Local Account
         #>
-        if ($credentials) {
-            <#
-              Do nothing - Credentials already Gathered
-            #>
-        }
-        else {
-            Write-Verbose -Message ((Get-Date -Format G) + "`tPrompt for $Name password...")
-            $credentials = Get-Credential -UserName $Name -Message "Enter Password for UserID: $Name"
-        } #END if/else
         $accountArgs = $esxcli.system.account.add.CreateArgs()
-        $accountArgs.id = $credentials.UserName
+        $accountArgs.id = $Credentials.UserName
         $accountArgs.description = $Description
         try {
-            $accountArgs.password = $credentials.GetNetworkCredential().Password
-            $accountArgs.passwordconfirmation = $credentials.GetNetworkCredential().Password
+            $accountArgs.password = $Credentials.GetNetworkCredential().Password
+            $accountArgs.passwordconfirmation = $Credentials.GetNetworkCredential().Password
         }
         catch {
             Write-Host "`nError: Failed to gather User ID: $Name password" -ForegroundColor Red
             Write-Host $_.Exception.Message -ForegroundColor Red
             break
         } #END catch
-        Write-Host "`tAdding UserID: "$credentials.UserName" on $vmhost..."
+        Write-Host "`tAdding UserID: "$Credentials.UserName" on $vmhost..."
         try {
             $esxcli.system.account.add.Invoke($accountArgs)
         }
         catch {
             $vmhostAdvancedView = Get-View $vmhost.ExtensionData.ConfigManager.AdvancedOption
-            $pwdQualityControl = $vmhostAdvancedView.Setting | Where-Object {$_.Key -eq "Security.PasswordQualityControl"} | Select-Object -ExpandProperty Value
+            $pwdQualityControl = $vmhostAdvancedView.Setting | Where-Object { $_.Key -eq "Security.PasswordQualityControl" } | Select-Object -ExpandProperty Value
             $retry = ($pwdQualityControl.Split('')[0])
             $pwd = ($pwdQualityControl.Split('')[1]).Split('=')[1]
             Write-Host "`nError: Failed to add User ID: $Name" -ForegroundColor Red
@@ -475,8 +478,8 @@ function Add-ESXiAccount {
         <#
           List account added
         #>
-        $accountAdded = $esxcli.system.account.list.Invoke() | Where-Object {$_.UserID -eq $Name.Trim()}
-        $accountRole = $esxcli.system.permission.list.Invoke() | Where-Object {$_.Principal -eq $Name.Trim()} | Select-Object -ExpandProperty Role
+        $accountAdded = $esxcli.system.account.list.Invoke() | Where-Object { $_.UserID -eq $Name.Trim() }
+        $accountRole = $esxcli.system.permission.list.Invoke() | Where-Object { $_.Principal -eq $Name.Trim() } | Select-Object -ExpandProperty Role
 
         <#
           Use a custom object to store
@@ -515,14 +518,13 @@ function Add-ESXiAccount {
 function Set-ESXiAccount {
     <#
      .SYNOPSIS
-       Set ESXi 6.x account security settings
+       Set ESXi 6.x and above account security settings
      .DESCRIPTION
        Updates ESXi local account Description, Password or Permission
      .NOTES
        Author: Edgar Sanchez - @edmsanchez13
      .Link
        https://github.com/edmsanchez/PowerShell
-       https://virtualcornerstone.com/
      .INPUTS
        No inputs required
      .OUTPUTS
@@ -555,6 +557,11 @@ function Set-ESXiAccount {
        The name(s) of the vSphere Virtual Datacenter(s).
      .EXAMPLE
        Set-ESXiAccount -Name "testuser" -Description "Local test User" -Permission "Admin" -Datacenter vDC001
+     .PARAMETER Credentials
+       Provides User Credentials as a PSCredential Object
+     .EXAMPLE
+       Set-ESXiAccount -Name "testuser" -Description "Local test User" -Permission "Admin" -Datacenter vDC001 -Credentials $UserCredentials
+
     #> 
     
     <#
@@ -569,7 +576,11 @@ function Set-ESXiAccount {
         [switch]$ResetPassword,
         [Parameter(Mandatory = $false)]$VMhost,
         [Parameter(Mandatory = $false)]$Cluster,
-        [Parameter(Mandatory = $false)]$Datacenter
+        [Parameter(Mandatory = $false)]$Datacenter,
+        [ValidateNotNull()]
+        [System.Management.Automation.PSCredential]
+        [System.Management.Automation.Credential()]
+        $Credentials = [System.Management.Automation.PSCredential]::Empty
     )
     
     $skipCollection = @()
@@ -679,7 +690,6 @@ function Set-ESXiAccount {
     <#
       Main code execution
     #>
-    $credentials = $null
     foreach ($vmhost in $vHostList) {
     
         <#
@@ -706,9 +716,9 @@ function Set-ESXiAccount {
     
         <#
          Validate ESXi Version
-         Will run only of 6.x
+         Will run only of 6.x and above
         #>
-        if ($vmhost.ApiVersion -notmatch '6.') {
+        if ([decimal]$vmHost.ApiVersion.Substring(0, 3) -lt 6) {
             Write-Warning -Message ("`t$vmhost is ESXi v" + $vmhost.ApiVersion + ". Skipping host.")
             continue
         }
@@ -718,7 +728,7 @@ function Set-ESXiAccount {
         #>
         $esxcli = Get-EsxCli -VMHost $vmhost -V2
         Write-Verbose -Message ((Get-Date -Format G) + "`tValidating $Name User ID exists on $vmhost...")
-        if ($esxcli.system.account.list.Invoke() | Where-Object {$_.UserID -eq $Name.Trim()}) {
+        if ($esxcli.system.account.list.Invoke() | Where-Object { $_.UserID -eq $Name.Trim() }) {
             $accountArgs = $esxcli.system.account.set.CreateArgs()
             $updateAccount = $false
             $updatePermission = $false
@@ -733,20 +743,17 @@ function Set-ESXiAccount {
                 $accountArgs.description = $Description.Trim()
             } #END if            
             if ($ResetPassword) {
-                if ($credentials) {
-                    <#
-                      Do nothing - Credentials already Gathered
-                    #>
-                }
-                else {
+                #Validate PSCredential
+                if ($Credentials -eq [System.Management.Automation.PSCredential]::Empty) {
                     Write-Verbose -Message ((Get-Date -Format G) + "`tPrompt for $Name password...")
-                    $credentials = Get-Credential -UserName $Name -Message "Enter new password for UserID: $Name"
-                } #END if/else
+                    $Credentials = Get-Credential -UserName $Name -Message "Enter Password for UserID: $Name"
+                } #END if
+
                 $updateAccount = $true
                 $accountArgs.id = $Name.Trim()
                 try {
-                    $accountArgs.password = $credentials.GetNetworkCredential().Password
-                    $accountArgs.passwordconfirmation = $credentials.GetNetworkCredential().Password
+                    $accountArgs.password = $Credentials.GetNetworkCredential().Password
+                    $accountArgs.passwordconfirmation = $Credentials.GetNetworkCredential().Password
                 }
                 catch {
                     Write-Host "`nError: Failed to gather User ID: $Name password" -ForegroundColor Red
@@ -762,7 +769,7 @@ function Set-ESXiAccount {
                 }
                 catch {
                     $vmhostAdvancedView = Get-View $vmhost.ExtensionData.ConfigManager.AdvancedOption
-                    $pwdQualityControl = $vmhostAdvancedView.Setting | Where-Object {$_.Key -eq "Security.PasswordQualityControl"} | Select-Object -ExpandProperty Value
+                    $pwdQualityControl = $vmhostAdvancedView.Setting | Where-Object { $_.Key -eq "Security.PasswordQualityControl" } | Select-Object -ExpandProperty Value
                     $retry = ($pwdQualityControl.Split('')[0])
                     $pwd = ($pwdQualityControl.Split('')[1]).Split('=')[1]
                     Write-Host "`nError: Failed to update User ID: $Name" -ForegroundColor Red
@@ -794,8 +801,8 @@ function Set-ESXiAccount {
             <#
               List account added
             #>
-            $accountUpdated = $esxcli.system.account.list.Invoke() | Where-Object {$_.UserID -eq $Name.Trim()}
-            $accountRole = $esxcli.system.permission.list.Invoke() | Where-Object {$_.Principal -eq $Name.Trim()} | Select-Object -ExpandProperty Role
+            $accountUpdated = $esxcli.system.account.list.Invoke() | Where-Object { $_.UserID -eq $Name.Trim() }
+            $accountRole = $esxcli.system.permission.list.Invoke() | Where-Object { $_.Principal -eq $Name.Trim() } | Select-Object -ExpandProperty Role
 
             <#
           Use a custom object to store
@@ -839,14 +846,13 @@ function Set-ESXiAccount {
 function Remove-ESXiAccount {
     <#
      .SYNOPSIS
-       Removes ESXi 6.x loca account
+       Removes ESXi 6.x and above local account
      .DESCRIPTION
-       Checks and removes ESXi 6.x local account
+       Checks and removes ESXi local account
      .NOTES
        Author: Edgar Sanchez - @edmsanchez13
      .Link
        https://github.com/edmsanchez/PowerShell
-       https://virtualcornerstone.com/
      .INPUTS
        No inputs required
      .OUTPUTS
@@ -1007,9 +1013,9 @@ function Remove-ESXiAccount {
     
         <#
          Validate ESXi Version
-         Will run only of 6.x
+         Will run only of 6.x and above
         #>
-        if ($vmhost.ApiVersion -notmatch '6.') {
+        if ([decimal]$vmHost.ApiVersion.Substring(0, 3) -lt 6) {
             Write-Warning -Message ("`t$vmhost is ESXi v" + $vmhost.ApiVersion + ". Skipping host.")
             continue
         }
@@ -1019,7 +1025,7 @@ function Remove-ESXiAccount {
         #>
         $esxcli = Get-EsxCli -VMHost $vmhost -V2
         Write-Verbose -Message ((Get-Date -Format G) + "`tValidating $Name User ID exists on $vmhost...")
-        if ($esxcli.system.account.list.Invoke() | Where-Object {$_.UserID -eq $Name.Trim()}) {
+        if ($esxcli.system.account.list.Invoke() | Where-Object { $_.UserID -eq $Name.Trim() }) {
             $accountArgs = $esxcli.system.account.remove.CreateArgs()
             $accountArgs.id = $Name.Trim()
             Write-Host "`tRemoving UserID: $Name on $vmhost..."
@@ -1044,7 +1050,7 @@ function Remove-ESXiAccount {
         $localAccounts = $esxcli.system.account.list.Invoke()
         $systemPermission = $esxcli.system.permission.list.Invoke()
         foreach ($account in $localAccounts) {
-            $accountRole = $systemPermission | Where-Object {$_.Principal -eq $account.UserID} | Select-Object -ExpandProperty Role
+            $accountRole = $systemPermission | Where-Object { $_.Principal -eq $account.UserID } | Select-Object -ExpandProperty Role
 
             <#
               Use a custom object to store
@@ -1084,14 +1090,13 @@ function Remove-ESXiAccount {
 function Get-ESXiAccountSecurity {
     <#
      .SYNOPSIS
-       Get ESXi 6.x local account security settings
+       Get ESXi 6.x and above local account security settings
      .DESCRIPTION
-       Get local account security settings and password quality control for ESXi 6.x
+       Get local account security settings and password quality control for ESXi 6.x and above
      .NOTES
        Author: Edgar Sanchez - @edmsanchez13
      .Link
        https://github.com/edmsanchez/PowerShell
-       https://virtualcornerstone.com/
      .INPUTS
        No inputs required
      .OUTPUTS
@@ -1253,10 +1258,10 @@ function Get-ESXiAccountSecurity {
         } #END if/else
     
         <#
-          Get vSphere 6 Account Management Settings
+          Get vSphere Account Management Settings
         #>
         Write-Host "`tGathering Account Management Settings from $vmhost ..."
-        if ($vmhost.ApiVersion -notmatch '6.') {
+        if ([decimal]$vmHost.ApiVersion.Substring(0, 3) -lt 6) {
             Write-Warning -Message ("`t$vmhost is ESXi v" + $vmhost.ApiVersion + ". Skipping host.")
             continue
         }
@@ -1270,8 +1275,8 @@ function Get-ESXiAccountSecurity {
             $accountLockedEvents = $null
             $badLogonEvents = $null
             Write-Verbose -Message ((Get-Date -Format G) + "`tGathering Bad logon/locked out events for the past $EventsPastHrs Hr(s) on $vmhost...")
-            $accountLockedEvents = $vmhost | Get-VIEvent -Start (Get-Date).AddHours( - $EventsPastHrs) | Where-Object {$_.EventTypeId -eq "esx.audit.account.locked"}
-            $badLogonEvents = $vmhost | Get-VIEvent -Start (Get-Date).AddHours( - $EventsPastHrs) | Where-Object {$_ -is [VMware.Vim.BadUsernameSessionEvent]}
+            $accountLockedEvents = $vmhost | Get-VIEvent -Start (Get-Date).AddHours( - $EventsPastHrs) | Where-Object { $_.EventTypeId -eq "esx.audit.account.locked" }
+            $badLogonEvents = $vmhost | Get-VIEvent -Start (Get-Date).AddHours( - $EventsPastHrs) | Where-Object { $_ -is [VMware.Vim.BadUsernameSessionEvent] }
             if ($accountLockedEvents) {
                 foreach ($accountLockEvent in $accountLockedEvents) {
 
@@ -1310,9 +1315,9 @@ function Get-ESXiAccountSecurity {
         #>
         $outputCollection += [PSCustomObject]@{
             'Hostname'               = $vmhost.Name
-            'LockFailures'           = $vmhostSecurity | Where-Object { $_.Key -eq "Security.AccountLockFailures"} | Select-Object -ExpandProperty Value
-            'UnlockTime Seconds'     = $vmhostSecurity | Where-Object { $_.Key -eq "Security.AccountUnlockTime"} | Select-Object -ExpandProperty Value
-            'PasswordQualityControl' = $vmhostSecurity | Where-Object { $_.Key -eq "Security.PasswordQualityControl"} | Select-Object -ExpandProperty Value
+            'LockFailures'           = $vmhostSecurity | Where-Object { $_.Key -eq "Security.AccountLockFailures" } | Select-Object -ExpandProperty Value
+            'UnlockTime Seconds'     = $vmhostSecurity | Where-Object { $_.Key -eq "Security.AccountUnlockTime" } | Select-Object -ExpandProperty Value
+            'PasswordQualityControl' = $vmhostSecurity | Where-Object { $_.Key -eq "Security.PasswordQualityControl" } | Select-Object -ExpandProperty Value
         } #END [PSCustomObject]
     } #END foreach
     
